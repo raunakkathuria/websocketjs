@@ -3,6 +3,13 @@
  *
  * Provide additional functionality like if connection is close, open
  * it again and process the buffered requests
+ *
+ * Usage:
+ *
+ * ReconnectSocket.init() // initial connection
+ * ReconnectSocket.send({sample: "key"}), ReconnectSocket.send("plain message") // send your data
+ * ReconnectSocket.close() // close the connection
+ * ReconnectSocket.clear() // clear buffer if you want to instantiate new connection
  */
 
 var ReconnectSocket = (function () {
@@ -10,7 +17,8 @@ var ReconnectSocket = (function () {
 
     var socket,
         socketUrl = "",
-        bufferedSends = [];
+        bufferedSends = [],
+        isJSON = 0; // flag to indicate whether you send JSON message
 
     var status = function () {
         return socket && socket.readyState;
@@ -26,12 +34,15 @@ var ReconnectSocket = (function () {
 
     var sendBufferedSends = function () {
         while (bufferedSends.length > 0) {
-            socket.send(JSON.stringify(bufferedSends.shift()));
+            if (isJSON) {
+                socket.send(JSON.stringify(bufferedSends.shift()));
+            } else {
+                socket.send(bufferedSends.shift());
+            }
         }
     };
 
     var init = function () {
-
         if(isClose()){
             socket = new WebSocket(socketUrl);
         }
@@ -40,6 +51,7 @@ var ReconnectSocket = (function () {
             sendBufferedSends();
         };
 
+        // implement your server response handling here
         socket.onmessage = function (msg){
             console.log(msg);
         };
@@ -54,11 +66,16 @@ var ReconnectSocket = (function () {
     };
 
     var send = function(data) {
+        // check if its close then initilaize again
         if (isClose()) {
             bufferedSends.push(data);
             init();
         } else if (isReady()) {
-            socket.send(JSON.stringify(data));
+            if (isJSON) {
+                socket.send(JSON.stringify(data));
+            } else {
+                socket.send(data);
+            }
         } else {
             bufferedSends.push(data);
         }
@@ -73,14 +90,12 @@ var ReconnectSocket = (function () {
 
     var clear = function(){
         bufferedSends = [];
-        manualClosed = false;
     };
 
     return {
         init: init,
         send: send,
         close: close,
-        socket: socket,
         clear: clear
     };
 
